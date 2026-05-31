@@ -16,9 +16,6 @@ class ArrayVoteTally implements VoteTally
     /** @var array<int, array<string, true>> */
     private array $voters = [];
 
-    /** @var array<string, int> */
-    private array $heartbeats = [];
-
     public function up(int $dishId): int
     {
         $this->counts[$dishId] ??= ['up' => 0, 'down' => 0];
@@ -52,6 +49,10 @@ class ArrayVoteTally implements VoteTally
     public function seed(int $dishId, int $up, int $down): void
     {
         $this->counts[$dishId] = ['up' => $up, 'down' => $down];
+
+        // A freshly plated dish starts with no voters; clearing keeps a reused
+        // dish id from inheriting an earlier dish's voters.
+        unset($this->voters[$dishId]);
     }
 
     public function recordVoter(int $dishId, string $voterId): bool
@@ -63,21 +64,5 @@ class ArrayVoteTally implements VoteTally
         $this->voters[$dishId][$voterId] = true;
 
         return true;
-    }
-
-    public function heartbeat(string $voterId): int
-    {
-        $this->heartbeats[$voterId] = now()->timestamp;
-
-        return $this->connections();
-    }
-
-    public function connections(): int
-    {
-        $cutoff = now()->timestamp - 30;
-
-        $this->heartbeats = array_filter($this->heartbeats, fn (int $at): bool => $at > $cutoff);
-
-        return count($this->heartbeats);
     }
 }

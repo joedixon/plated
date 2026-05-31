@@ -19,6 +19,8 @@ class Dish extends Model
         'pairing',
         'glyph',
         'sequence',
+        'up',
+        'down',
         'status',
     ];
 
@@ -27,11 +29,20 @@ class Dish extends Model
     ];
 
     /**
-     * Order dishes the way they land on the pass.
+     * Order dishes the way they land on the pass — newest first.
      */
     public function scopeOrdered(Builder $query): Builder
     {
-        return $query->orderBy('sequence');
+        return $query->orderByDesc('sequence');
+    }
+
+    /**
+     * Limit the query to dishes still live on the pass — once a dish is cooked
+     * it has been sent to the table and no longer belongs on the board.
+     */
+    public function scopeOnThePass(Builder $query): Builder
+    {
+        return $query->where('status', DishStatus::Plated);
     }
 
     /**
@@ -40,6 +51,8 @@ class Dish extends Model
     protected function casts(): array
     {
         return [
+            'up' => 'integer',
+            'down' => 'integer',
             'status' => DishStatus::class,
         ];
     }

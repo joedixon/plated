@@ -42,6 +42,12 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Anonymous board visitors, identified by session id via the request
+        // guard registered in AppServiceProvider. Used for presence counting.
+        'visitor' => [
+            'driver' => 'visitor',
+        ],
     ],
 
     /*

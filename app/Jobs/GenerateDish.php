@@ -10,6 +10,7 @@ use App\Support\Contracts\VoteTally;
 use App\Support\SpendingCap;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -65,7 +66,7 @@ class GenerateDish implements ShouldQueue
     private function compose(): ?array
     {
         try {
-            $response = (new DishComposer)->prompt('Invent tonight\'s next dish.');
+            $response = (new DishComposer)->prompt($this->brief());
 
             return [
                 'name' => $response['name'],
@@ -78,5 +79,43 @@ class GenerateDish implements ShouldQueue
 
             return null;
         }
+    }
+
+    /**
+     * Build the brief for the next dish. The agent has no memory between calls,
+     * so we hand it the dishes already on tonight's menu to steer clear of, plus
+     * a random culinary anchor to break it out of its default repertoire.
+     */
+    private function brief(): string
+    {
+        $brief = "Invent tonight's next dish. ".$this->anchor();
+
+        $recent = Dish::query()
+            ->orderByDesc('sequence')
+            ->limit(40)
+            ->pluck('name')
+            ->all();
+
+        if ($recent !== []) {
+            $brief .= "\n\nThese dishes are already on tonight's menu — do not repeat, ".
+                'rephrase, or reuse the same hero ingredient, technique, or title pattern '.
+                "as any of them:\n- ".implode("\n- ", $recent);
+        }
+
+        return $brief;
+    }
+
+    /**
+     * A random culinary starting point so successive dishes diverge in cuisine,
+     * star ingredient, and technique rather than circling the same few ideas.
+     */
+    private function anchor(): string
+    {
+        return sprintf(
+            'Draw inspiration from %s cooking, build it around %s, and let %s define the technique.',
+            Arr::random(['Japanese', 'Peruvian', 'Nordic', 'Levantine', 'West African', 'Sichuan', 'Basque', 'Oaxacan', 'Vietnamese', 'Georgian', 'Korean', 'Sardinian']),
+            Arr::random(['heritage carrots', 'line-caught mackerel', 'aged duck', 'koji', 'wild mushrooms', 'sea urchin', 'fermented black garlic', 'venison', 'stone fruit', 'celeriac', 'langoustine', 'buckwheat']),
+            Arr::random(['live-fire grilling', 'curing', 'fermentation', 'smoking', 'raw preparation', 'slow braising', 'charcoal embers', 'pickling', 'whey poaching', 'clay-pot roasting']),
+        );
     }
 }

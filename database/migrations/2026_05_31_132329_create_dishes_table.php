@@ -18,6 +18,8 @@ return new class extends Migration
             $table->string('pairing');
             $table->string('glyph');
             $table->unsignedInteger('sequence')->unique();
+            $table->unsignedInteger('up')->default(0);
+            $table->unsignedInteger('down')->default(0);
             $table->string('status')->default('plated')->index();
             $table->timestamps();
         });

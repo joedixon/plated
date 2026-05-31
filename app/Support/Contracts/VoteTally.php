@@ -30,7 +30,8 @@ interface VoteTally
     public function countsForMany(array $dishIds): array;
 
     /**
-     * Seed a dish's counters to a known starting value.
+     * Seed a dish's counters to a known starting value and clear any recorded
+     * voters, so a freshly plated dish always starts clean.
      */
     public function seed(int $dishId, int $up, int $down): void;
 
@@ -39,15 +40,4 @@ interface VoteTally
      * first time the voter has voted on this dish (i.e. the vote counts).
      */
     public function recordVoter(int $dishId, string $voterId): bool;
-
-    /**
-     * Register a heartbeat for a connected visitor and return the current
-     * number of live connections in the room.
-     */
-    public function heartbeat(string $voterId): int;
-
-    /**
-     * The current number of live connections in the room.
-     */
-    public function connections(): int;
 }

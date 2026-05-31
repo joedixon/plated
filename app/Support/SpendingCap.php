@@ -2,7 +2,7 @@
 
 namespace App\Support;
 
-use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * A demo-grade spending cap on AI dish generation. It counts how many dishes
@@ -31,8 +31,8 @@ class SpendingCap
     {
         $key = $this->key();
 
-        Redis::incr($key);
-        Redis::expire($key, 86400);
+        Cache::add($key, 0, now()->endOfDay());
+        Cache::increment($key);
     }
 
     /**
@@ -40,7 +40,7 @@ class SpendingCap
      */
     public function spentToday(): int
     {
-        return (int) Redis::get($this->key());
+        return (int) Cache::get($this->key(), 0);
     }
 
     /**

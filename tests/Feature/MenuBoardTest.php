@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\DishStatus;
 use App\Events\DishPlated;
 use App\Events\TallyUpdated;
 use App\Models\Dish;
@@ -22,6 +23,16 @@ it('renders the board with its dishes and tallies', function () {
         ->assertSee('Charred Leek Velouté')
         ->assertSee('Order #0142')
         ->assertSee('75% approval');
+});
+
+it('keeps cooked dishes off the pass', function () {
+    Dish::factory()->create(['name' => 'Charred Leek Velouté', 'status' => DishStatus::Plated]);
+    Dish::factory()->create(['name' => 'Sea Urchin Custard', 'status' => DishStatus::Cooked]);
+
+    $this->get('/')
+        ->assertOk()
+        ->assertSee('Charred Leek Velouté')
+        ->assertDontSee('Sea Urchin Custard');
 });
 
 it('broadcasts a tally update on the public board channel', function () {

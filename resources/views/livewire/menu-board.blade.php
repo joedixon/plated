@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\DishStatus;
+use App\Events\DishCooked;
 use App\Events\TallyUpdated;
 use App\Models\Dish;
 use App\Support\Approval;
@@ -18,11 +20,6 @@ new #[Layout('layouts.app')] class extends Component {
     public array $dishes = [];
 
     /**
-     * The live connection count for the room.
-     */
-    public int $connections = 0;
-
-    /**
      * A stable id for this visitor, used to keep voting to one per dish.
      */
     public string $voterId = '';
@@ -30,9 +27,8 @@ new #[Layout('layouts.app')] class extends Component {
     public function mount(VoteTally $tally): void
     {
         $this->voterId = session()->getId();
-        $this->connections = $tally->heartbeat($this->voterId);
 
-        $dishes = Dish::ordered()->get();
+        $dishes = Dish::onThePass()->ordered()->get();
         $counts = $tally->countsForMany($dishes->pluck('id')->all());
 
         $this->dishes = $dishes->map(fn (Dish $dish): array => [
@@ -79,6 +75,32 @@ new #[Layout('layouts.app')] class extends Component {
         $this->applyCounts($dishId, $counts['up'], $counts['down']);
 
         TallyUpdated::dispatch($dishId, $counts['up'], $counts['down']);
+
+        $this->cookIfReady($dishId, $counts['up'], $counts['down']);
+    }
+
+    /**
+     * Fire the dish off the pass once enough diners have called for it. The
+     * status transition doubles as the guard, so only the request that first
+     * crosses the threshold broadcasts — even under concurrent votes.
+     */
+    private function cookIfReady(int $dishId, int $up, int $down): void
+    {
+        if ($up - $down < config('plated.cook_threshold')) {
+            return;
+        }
+
+        $cooked = Dish::where('id', $dishId)
+            ->where('status', DishStatus::Plated)
+            ->update(['status' => DishStatus::Cooked]);
+
+        if ($cooked === 0) {
+            return;
+        }
+
+        $glyph = collect($this->dishes)->firstWhere('id', $dishId)['glyph'] ?? '🍽️';
+
+        DishCooked::dispatch($dishId, $glyph);
     }
 
     /**
@@ -91,7 +113,7 @@ new #[Layout('layouts.app')] class extends Component {
     }
 
     /**
-     * A new dish was plated — land it on the pass.
+     * A new dish was plated — slide it in at the top of the pass.
      */
     #[On('echo:board,.DishPlated')]
     public function onDishPlated(array $event): void
@@ -102,7 +124,7 @@ new #[Layout('layouts.app')] class extends Component {
             }
         }
 
-        $this->dishes[] = [
+        array_unshift($this->dishes, [
             'id' => (int) $event['id'],
             'name' => $event['name'],
             'description' => $event['description'],
@@ -112,16 +134,23 @@ new #[Layout('layouts.app')] class extends Component {
             'up' => (int) $event['up'],
             'down' => (int) $event['down'],
             'pct' => (int) $event['pct'],
-        ];
+        ]);
     }
 
     /**
-     * Keep this visitor counted as live and refresh the room's connection
-     * count. Driven by wire:poll so stale connections drop off naturally.
+     * A dish hit its threshold — flare its glyph and clear it off the pass.
+     * Driven by the broadcast so every board, including the voter who tipped
+     * it over, plays the animation and drops the ticket exactly once.
      */
-    public function heartbeat(VoteTally $tally): void
+    #[On('echo:board,.DishCooked')]
+    public function onDishCooked(array $event): void
     {
-        $this->connections = $tally->heartbeat($this->voterId);
+        $this->dishes = array_values(array_filter(
+            $this->dishes,
+            fn (array $dish): bool => $dish['id'] !== (int) $event['dishId'],
+        ));
+
+        $this->dispatch('dish-cooked', glyph: $event['glyph']);
     }
 
     /**
@@ -141,15 +170,30 @@ new #[Layout('layouts.app')] class extends Component {
     }
 }; ?>
 
-<main wire:poll.15s="heartbeat" class="isolate min-h-dvh bg-[#F5EFE0] font-mono text-[#1A1814] [background-image:radial-gradient(#1a18141a_1px,transparent_1px)] [background-size:14px_14px]">
+<main class="isolate min-h-dvh bg-[#F5EFE0] font-mono text-[#1A1814] [background-image:radial-gradient(#1a18141a_1px,transparent_1px)] [background-size:14px_14px]">
+    <div
+        x-data="{ cooks: [] }"
+        x-on:dish-cooked.window="
+            const id = Date.now() + Math.random();
+            cooks.push({ id, glyph: $event.detail.glyph });
+            setTimeout(() => cooks = cooks.filter(c => c.id !== id), 1600);
+        "
+        class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center"
+        aria-hidden="true"
+    >
+        <template x-for="cook in cooks" :key="cook.id">
+            <span x-text="cook.glyph" class="absolute animate-plate-pop text-[10rem] drop-shadow-xl sm:text-[16rem]"></span>
+        </template>
+    </div>
+
     <div class="mx-auto max-w-7xl px-5 pt-10 pb-20 sm:px-8 lg:px-12">
 
-        <header class="mb-12 grid gap-6 border-b-2 border-dashed border-[#1A1814]/30 pb-8 lg:grid-cols-[1fr_auto] lg:items-end">
+        <header class="mb-8 grid gap-6 border-b-2 border-dashed border-[#1A1814]/30 pb-8 lg:grid-cols-[1fr_auto] lg:items-end">
             <div>
-                <div class="mb-3 flex items-center gap-3 text-xs uppercase tracking-wider text-[#C8362E]">
+                <div class="mb-3 flex items-center gap-3 text-xs uppercase tracking-wider text-[#3FA35A]">
                     <span class="relative flex size-2">
-                        <span class="absolute inset-0 animate-ping rounded-full bg-[#C8362E] opacity-75"></span>
-                        <span class="relative inline-flex size-2 rounded-full bg-[#C8362E]"></span>
+                        <span class="absolute inset-0 animate-ping rounded-full bg-[#3FA35A] opacity-75"></span>
+                        <span class="relative inline-flex size-2 rounded-full bg-[#3FA35A]"></span>
                     </span>
                     <span class="font-semibold">On the pass · Live</span>
                 </div>
@@ -157,7 +201,7 @@ new #[Layout('layouts.app')] class extends Component {
                     Plated<span class="text-[#C8362E]">.</span>
                 </h1>
                 <p class="mt-4 max-w-[60ch] text-sm leading-6 text-[#5B5147] text-pretty">
-                    Tonight's menu is generated as we go. Tickets land on the pass when the line cooks (a.k.a. your queue workers) finish them. <span class="text-[#1A1814]">Vote thumbs up or down on each ticket</span> and the tally rings in for the whole room.
+                    AI plates a fresh dish onto the pass every few seconds. <span class="text-[#1A1814]">Vote each ticket up or down</span> — win the room over and the kitchen cooks it off the pass.
                 </p>
             </div>
             <dl class="grid grid-cols-3 gap-px overflow-hidden rounded-sm border-2 border-[#1A1814] bg-[#1A1814] text-center text-[#F5EFE0] lg:w-80">
@@ -176,14 +220,12 @@ new #[Layout('layouts.app')] class extends Component {
             </dl>
         </header>
 
-        <div class="relative">
-            <div class="absolute inset-x-0 top-0 h-px bg-[#1A1814]/40" aria-hidden="true"></div>
-            <div class="grid gap-6 pt-6 sm:grid-cols-2 lg:grid-cols-3" role="list">
+        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" role="list">
                 @php
                     $rotations = ['-rotate-[0.6deg]', 'rotate-[0.4deg]', '-rotate-[0.3deg]', 'rotate-[0.7deg]', '-rotate-[0.5deg]', 'rotate-[0.2deg]'];
                 @endphp
                 @foreach ($dishes as $i => $meal)
-                    <article wire:key="dish-{{ $meal['id'] }}" class="relative bg-[#FBF7EC] shadow-[0_2px_0_#1a18141a,0_18px_30px_-20px_#1a181466] {{ $rotations[$i % count($rotations)] }}" role="listitem">
+                    <article wire:key="dish-{{ $meal['id'] }}" class="relative flex flex-col bg-[#FBF7EC] shadow-[0_2px_0_#1a18141a,0_18px_30px_-20px_#1a181466] {{ $rotations[$i % count($rotations)] }}" role="listitem">
                         <span class="absolute -top-2 left-1/2 h-2 w-8 -translate-x-1/2 rounded-sm bg-[#1A1814]/80" aria-hidden="true"></span>
                         <div class="border-b border-dashed border-[#1A1814]/40 px-5 py-3">
                             <div class="flex items-center justify-between text-[0.7rem] uppercase tracking-wider text-[#5B5147]">
@@ -191,7 +233,7 @@ new #[Layout('layouts.app')] class extends Component {
                                 <span class="rounded-sm bg-[#C8362E] px-1.5 py-0.5 text-[0.625rem] font-semibold text-[#F5EFE0]">ASAP</span>
                             </div>
                         </div>
-                        <div class="px-5 py-5">
+                        <div class="flex-1 px-5 py-5">
                             <div class="mb-3 flex size-12 items-center justify-center rounded-full bg-[#F5EFE0] text-2xl ring-1 ring-[#1A1814]/30">
                                 <span aria-hidden="true">{{ $meal['glyph'] }}</span>
                             </div>
@@ -222,12 +264,18 @@ new #[Layout('layouts.app')] class extends Component {
                         </div>
                     </article>
                 @endforeach
-            </div>
         </div>
 
         <footer class="mt-16 grid gap-3 border-t-2 border-dashed border-[#1A1814]/30 pt-6 text-[0.7rem] uppercase tracking-wider text-[#5B5147] sm:grid-cols-3">
             <p>Pass closes at the end of the webinar. Tickets keep firing on the queue.</p>
-            <p class="sm:text-center">Connections <span class="ml-2 tabular-nums text-[#1A1814]">{{ number_format($connections) }}</span></p>
+            <p
+                class="sm:text-center"
+                x-data="{ n: 0 }"
+                x-init="window.Echo.join('board')
+                    .here(users => n = users.length)
+                    .joining(() => n++)
+                    .leaving(() => n--)"
+            >Connections <span class="ml-2 tabular-nums text-[#1A1814]" x-text="n">0</span></p>
             <p class="sm:text-right">Plated · Laravel Cloud 2.0 demo</p>
         </footer>
     </div>

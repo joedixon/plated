@@ -1,5 +1,7 @@
 <?php
 
+use App\Enums\DishStatus;
+use App\Events\DishCooked;
 use App\Events\TallyUpdated;
 use App\Models\Dish;
 use App\Support\ArrayVoteTally;
@@ -67,4 +69,50 @@ it('ignores an invalid vote direction', function () {
     expect($this->tally->counts($dish->id))->toBe(['up' => 1, 'down' => 1]);
 
     Event::assertNotDispatched(TallyUpdated::class);
+});
+
+it('cooks a dish once its net score reaches the threshold', function () {
+    config()->set('plated.cook_threshold', 5);
+    Event::fake([DishCooked::class]);
+
+    $dish = Dish::factory()->create(['status' => DishStatus::Plated, 'glyph' => '🍤']);
+
+    $component = Volt::test('menu-board');
+
+    foreach (range(1, 5) as $voter) {
+        $component->set('voterId', "voter-{$voter}")
+            ->call('vote', $dish->id, 'up');
+    }
+
+    expect($dish->fresh()->status)->toBe(DishStatus::Cooked);
+
+    Event::assertDispatched(DishCooked::class, fn (DishCooked $e) => $e->dishId === $dish->id
+        && $e->glyph === '🍤');
+});
+
+it('does not cook below the threshold and cooks at most once', function () {
+    config()->set('plated.cook_threshold', 5);
+    Event::fake([DishCooked::class]);
+
+    $dish = Dish::factory()->create(['status' => DishStatus::Plated]);
+
+    $component = Volt::test('menu-board');
+
+    // Four upvotes is one short of the threshold.
+    foreach (range(1, 4) as $voter) {
+        $component->set('voterId', "voter-{$voter}")
+            ->call('vote', $dish->id, 'up');
+    }
+
+    expect($dish->fresh()->status)->toBe(DishStatus::Plated);
+    Event::assertNotDispatched(DishCooked::class);
+
+    // Two more cross the threshold, but the dish only cooks once.
+    foreach (range(5, 6) as $voter) {
+        $component->set('voterId', "voter-{$voter}")
+            ->call('vote', $dish->id, 'up');
+    }
+
+    expect($dish->fresh()->status)->toBe(DishStatus::Cooked);
+    Event::assertDispatchedTimes(DishCooked::class, 1);
 });
