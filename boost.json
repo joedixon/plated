@@ -10,7 +10,10 @@
     "nightwatch": false,
     "sail": false,
     "skills": [
+        "ai-sdk-development",
         "laravel-best-practices",
+        "livewire-development",
+        "volt-development",
         "pest-testing",
         "tailwindcss-development"
     ]
