@@ -5,11 +5,10 @@ namespace App\Events;
 use App\Models\Dish;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class DishPlated implements ShouldBroadcast
+class DishPlated
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 

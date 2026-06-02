@@ -4,17 +4,10 @@ use App\Enums\DishStatus;
 use App\Events\DishPlated;
 use App\Events\TallyUpdated;
 use App\Models\Dish;
-use App\Support\ArrayVoteTally;
-use App\Support\Contracts\VoteTally;
-
-beforeEach(function () {
-    $this->tally = new ArrayVoteTally;
-    $this->app->instance(VoteTally::class, $this->tally);
-});
 
 it('renders the board with its dishes and tallies', function () {
     $dish = Dish::factory()->create(['name' => 'Charred Leek Velouté', 'sequence' => 142]);
-    $this->tally->seed($dish->id, 30, 10);
+    seedTally($dish->id, 30, 10);
 
     $this->get('/')
         ->assertOk()

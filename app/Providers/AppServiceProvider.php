@@ -2,8 +2,6 @@
 
 namespace App\Providers;
 
-use App\Support\Contracts\VoteTally;
-use App\Support\DatabaseVoteTally;
 use App\Support\SpendingCap;
 use Illuminate\Auth\GenericUser;
 use Illuminate\Http\Request;
@@ -17,8 +15,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        $this->app->singleton(VoteTally::class, DatabaseVoteTally::class);
-
         $this->app->singleton(SpendingCap::class, fn (): SpendingCap => new SpendingCap(
             (int) config('plated.ai_daily_dish_cap'),
         ));

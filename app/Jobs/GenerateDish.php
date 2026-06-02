@@ -6,11 +6,11 @@ use App\Ai\Agents\DishComposer;
 use App\Enums\DishStatus;
 use App\Events\DishPlated;
 use App\Models\Dish;
-use App\Support\Contracts\VoteTally;
 use App\Support\SpendingCap;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -31,7 +31,7 @@ class GenerateDish implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(VoteTally $tally, SpendingCap $cap): void
+    public function handle(SpendingCap $cap): void
     {
         if (! $cap->canSpend()) {
             Log::info('Plated spending cap reached; skipping dish generation.');
@@ -51,7 +51,9 @@ class GenerateDish implements ShouldQueue
             'status' => DishStatus::Plated,
         ]);
 
-        $tally->seed($dish->id, 0, 0);
+        Cache::forever("dish:{$dish->id}:up", 0);
+        Cache::forever("dish:{$dish->id}:down", 0);
+
         $cap->record();
 
         DishPlated::dispatch($dish);

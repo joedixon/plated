@@ -4,8 +4,8 @@ namespace Database\Seeders;
 
 use App\Enums\DishStatus;
 use App\Models\Dish;
-use App\Support\Contracts\VoteTally;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Cache;
 
 class DishSeeder extends Seeder
 {
@@ -74,7 +74,7 @@ class DishSeeder extends Seeder
     /**
      * Seed the opening menu and its starting vote tallies.
      */
-    public function run(VoteTally $tally): void
+    public function run(): void
     {
         foreach (self::OPENING_MENU as $dish) {
             $model = Dish::updateOrCreate(
@@ -88,7 +88,8 @@ class DishSeeder extends Seeder
                 ],
             );
 
-            $tally->seed($model->id, $dish['up'], $dish['down']);
+            Cache::forever("dish:{$model->id}:up", $dish['up']);
+            Cache::forever("dish:{$model->id}:down", $dish['down']);
         }
     }
 }

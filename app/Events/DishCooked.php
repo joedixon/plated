@@ -4,11 +4,10 @@ namespace App\Events;
 
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class DishCooked implements ShouldBroadcastNow
+class DishCooked
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 

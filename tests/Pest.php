@@ -1,8 +1,7 @@
 <?php
 
-use App\Support\ArrayVoteTally;
-use App\Support\Contracts\VoteTally;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 /*
@@ -18,7 +17,6 @@ use Tests\TestCase;
 
 pest()->extend(TestCase::class)
     ->use(LazilyRefreshDatabase::class)
-    ->beforeEach(fn () => app()->instance(VoteTally::class, new ArrayVoteTally))
     ->in('Feature');
 
 /*
@@ -47,7 +45,24 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Seed a dish's cached vote counters, the way the seeder and job do in the app.
+ */
+function seedTally(int $dishId, int $up, int $down): void
 {
-    // ..
+    Cache::forever("dish:{$dishId}:up", $up);
+    Cache::forever("dish:{$dishId}:down", $down);
+}
+
+/**
+ * Read a dish's cached vote counters.
+ *
+ * @return array{up: int, down: int}
+ */
+function tallyCounts(int $dishId): array
+{
+    return [
+        'up' => (int) Cache::get("dish:{$dishId}:up", 0),
+        'down' => (int) Cache::get("dish:{$dishId}:down", 0),
+    ];
 }

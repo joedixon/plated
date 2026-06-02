@@ -5,11 +5,10 @@ namespace App\Events;
 use App\Support\Approval;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class TallyUpdated implements ShouldBroadcastNow
+class TallyUpdated
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 

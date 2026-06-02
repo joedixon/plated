@@ -5,7 +5,7 @@ use App\Events\DishCooked;
 use App\Events\TallyUpdated;
 use App\Models\Dish;
 use App\Support\Approval;
-use App\Support\Contracts\VoteTally;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
@@ -24,24 +24,26 @@ new #[Layout('layouts.app')] class extends Component {
      */
     public string $voterId = '';
 
-    public function mount(VoteTally $tally): void
+    public function mount(): void
     {
         $this->voterId = session()->getId();
 
-        $dishes = Dish::onThePass()->ordered()->get();
-        $counts = $tally->countsForMany($dishes->pluck('id')->all());
+        $this->dishes = Dish::onThePass()->ordered()->get()->map(function (Dish $dish): array {
+            $up = (int) Cache::get("dish:{$dish->id}:up", 0);
+            $down = (int) Cache::get("dish:{$dish->id}:down", 0);
 
-        $this->dishes = $dishes->map(fn (Dish $dish): array => [
-            'id' => $dish->id,
-            'name' => $dish->name,
-            'description' => $dish->description,
-            'pairing' => $dish->pairing,
-            'glyph' => $dish->glyph,
-            'sequence' => $dish->sequence,
-            'up' => $counts[$dish->id]['up'],
-            'down' => $counts[$dish->id]['down'],
-            'pct' => Approval::percentage($counts[$dish->id]['up'], $counts[$dish->id]['down']),
-        ])->all();
+            return [
+                'id' => $dish->id,
+                'name' => $dish->name,
+                'description' => $dish->description,
+                'pairing' => $dish->pairing,
+                'glyph' => $dish->glyph,
+                'sequence' => $dish->sequence,
+                'up' => $up,
+                'down' => $down,
+                'pct' => Approval::percentage($up, $down),
+            ];
+        })->all();
     }
 
     /**
@@ -56,27 +58,32 @@ new #[Layout('layouts.app')] class extends Component {
     /**
      * Cast a vote for a dish and broadcast the new tally to the room.
      */
-    public function vote(int $dishId, string $direction, VoteTally $tally): void
+    public function vote(int $dishId, string $direction): void
     {
         if (! in_array($direction, ['up', 'down'], true)) {
             return;
         }
 
-        if (! $tally->recordVoter($dishId, $this->voterId)) {
+        // One vote per visitor per dish: add() only succeeds the first time, so
+        // a repeat vote is dropped without ever touching the tally.
+        if (! Cache::add("dish:{$dishId}:voter:{$this->voterId}", true, now()->addDay())) {
             return;
         }
 
-        $direction === 'up'
-            ? $tally->up($dishId)
-            : $tally->down($dishId);
+        // add() guarantees the counter exists, then increment() is an atomic
+        // bump — correct no matter how many visitors vote at the same instant.
+        $key = "dish:{$dishId}:{$direction}";
+        Cache::add($key, 0);
+        Cache::increment($key);
 
-        $counts = $tally->counts($dishId);
+        $up = (int) Cache::get("dish:{$dishId}:up", 0);
+        $down = (int) Cache::get("dish:{$dishId}:down", 0);
 
-        $this->applyCounts($dishId, $counts['up'], $counts['down']);
+        $this->applyCounts($dishId, $up, $down);
 
-        TallyUpdated::dispatch($dishId, $counts['up'], $counts['down']);
+        TallyUpdated::dispatch($dishId, $up, $down);
 
-        $this->cookIfReady($dishId, $counts['up'], $counts['down']);
+        $this->cookIfReady($dishId, $up, $down);
     }
 
     /**
