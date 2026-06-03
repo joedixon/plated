@@ -24,13 +24,18 @@ new #[Layout('layouts.app')] class extends Component {
      */
     public string $voterId = '';
 
+    /**
+     * Whether the live tally store (Redis) is reachable. When it isn't, the
+     * board still renders the menu — votes just can't be read or cast.
+     */
+    public bool $tallyOnline = true;
+
     public function mount(): void
     {
         $this->voterId = session()->getId();
 
         $this->dishes = Dish::onThePass()->ordered()->get()->map(function (Dish $dish): array {
-            $up = (int) Cache::store('redis')->get("dish:{$dish->id}:up", 0);
-            $down = (int) Cache::store('redis')->get("dish:{$dish->id}:down", 0);
+            ['up' => $up, 'down' => $down] = $this->tallyFor($dish->id);
 
             return [
                 'id' => $dish->id,
@@ -44,6 +49,26 @@ new #[Layout('layouts.app')] class extends Component {
                 'pct' => Approval::percentage($up, $down),
             ];
         })->all();
+    }
+
+    /**
+     * Read a dish's up/down counts, degrading to zeros if the tally store is
+     * unreachable so a missing Redis never takes the whole board down.
+     *
+     * @return array{up: int, down: int}
+     */
+    private function tallyFor(int $dishId): array
+    {
+        try {
+            return [
+                'up' => (int) Cache::store('redis')->get("dish:{$dishId}:up", 0),
+                'down' => (int) Cache::store('redis')->get("dish:{$dishId}:down", 0),
+            ];
+        } catch (\Throwable) {
+            $this->tallyOnline = false;
+
+            return ['up' => 0, 'down' => 0];
+        }
     }
 
     /**
@@ -64,20 +89,26 @@ new #[Layout('layouts.app')] class extends Component {
             return;
         }
 
-        // One vote per visitor per dish: add() only succeeds the first time, so
-        // a repeat vote is dropped without ever touching the tally.
-        if (! Cache::store('redis')->add("dish:{$dishId}:voter:{$this->voterId}", true, now()->addDay())) {
+        try {
+            // One vote per visitor per dish: add() only succeeds the first time,
+            // so a repeat vote is dropped without ever touching the tally.
+            if (! Cache::store('redis')->add("dish:{$dishId}:voter:{$this->voterId}", true, now()->addDay())) {
+                return;
+            }
+
+            // add() guarantees the counter exists, then increment() is an atomic
+            // bump — correct no matter how many visitors vote at the same instant.
+            $key = "dish:{$dishId}:{$direction}";
+            Cache::store('redis')->add($key, 0);
+            Cache::store('redis')->increment($key);
+
+            $up = (int) Cache::store('redis')->get("dish:{$dishId}:up", 0);
+            $down = (int) Cache::store('redis')->get("dish:{$dishId}:down", 0);
+        } catch (\Throwable) {
+            $this->tallyOnline = false;
+
             return;
         }
-
-        // add() guarantees the counter exists, then increment() is an atomic
-        // bump — correct no matter how many visitors vote at the same instant.
-        $key = "dish:{$dishId}:{$direction}";
-        Cache::store('redis')->add($key, 0);
-        Cache::store('redis')->increment($key);
-
-        $up = (int) Cache::store('redis')->get("dish:{$dishId}:up", 0);
-        $down = (int) Cache::store('redis')->get("dish:{$dishId}:down", 0);
 
         $this->applyCounts($dishId, $up, $down);
 
@@ -194,6 +225,13 @@ new #[Layout('layouts.app')] class extends Component {
     </div>
 
     <div class="mx-auto max-w-7xl px-5 pt-10 pb-20 sm:px-8 lg:px-12">
+
+        @unless ($tallyOnline)
+            <div class="mb-8 flex items-center gap-3 rounded-sm border-2 border-[#C8362E] bg-[#C8362E]/10 px-4 py-3 text-sm text-[#1A1814]" role="status">
+                <span class="font-stencil text-base uppercase tracking-wider text-[#C8362E]">Tally offline</span>
+                <span class="text-[#5B5147]">The live vote store is unreachable, so voting is paused. The menu is still being plated.</span>
+            </div>
+        @endunless
 
         <header class="mb-8 grid gap-6 border-b-2 border-dashed border-[#1A1814]/30 pb-8 lg:grid-cols-[1fr_auto] lg:items-end">
             <div>
