@@ -29,8 +29,8 @@ new #[Layout('layouts.app')] class extends Component {
         $this->voterId = session()->getId();
 
         $this->dishes = Dish::onThePass()->ordered()->get()->map(function (Dish $dish): array {
-            $up = (int) Cache::get("dish:{$dish->id}:up", 0);
-            $down = (int) Cache::get("dish:{$dish->id}:down", 0);
+            $up = (int) Cache::store('redis')->get("dish:{$dish->id}:up", 0);
+            $down = (int) Cache::store('redis')->get("dish:{$dish->id}:down", 0);
 
             return [
                 'id' => $dish->id,
@@ -66,18 +66,18 @@ new #[Layout('layouts.app')] class extends Component {
 
         // One vote per visitor per dish: add() only succeeds the first time, so
         // a repeat vote is dropped without ever touching the tally.
-        if (! Cache::add("dish:{$dishId}:voter:{$this->voterId}", true, now()->addDay())) {
+        if (! Cache::store('redis')->add("dish:{$dishId}:voter:{$this->voterId}", true, now()->addDay())) {
             return;
         }
 
         // add() guarantees the counter exists, then increment() is an atomic
         // bump — correct no matter how many visitors vote at the same instant.
         $key = "dish:{$dishId}:{$direction}";
-        Cache::add($key, 0);
-        Cache::increment($key);
+        Cache::store('redis')->add($key, 0);
+        Cache::store('redis')->increment($key);
 
-        $up = (int) Cache::get("dish:{$dishId}:up", 0);
-        $down = (int) Cache::get("dish:{$dishId}:down", 0);
+        $up = (int) Cache::store('redis')->get("dish:{$dishId}:up", 0);
+        $down = (int) Cache::store('redis')->get("dish:{$dishId}:down", 0);
 
         $this->applyCounts($dishId, $up, $down);
 

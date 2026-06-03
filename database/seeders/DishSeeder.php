@@ -88,8 +88,8 @@ class DishSeeder extends Seeder
                 ],
             );
 
-            Cache::forever("dish:{$model->id}:up", $dish['up']);
-            Cache::forever("dish:{$model->id}:down", $dish['down']);
+            Cache::store('redis')->forever("dish:{$model->id}:up", $dish['up']);
+            Cache::store('redis')->forever("dish:{$model->id}:down", $dish['down']);
         }
     }
 }

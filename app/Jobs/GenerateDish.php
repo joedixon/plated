@@ -51,8 +51,8 @@ class GenerateDish implements ShouldQueue
             'status' => DishStatus::Plated,
         ]);
 
-        Cache::forever("dish:{$dish->id}:up", 0);
-        Cache::forever("dish:{$dish->id}:down", 0);
+        Cache::store('redis')->forever("dish:{$dish->id}:up", 0);
+        Cache::store('redis')->forever("dish:{$dish->id}:down", 0);
 
         $cap->record();
 

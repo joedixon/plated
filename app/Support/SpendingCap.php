@@ -31,8 +31,8 @@ class SpendingCap
     {
         $key = $this->key();
 
-        Cache::add($key, 0, now()->endOfDay());
-        Cache::increment($key);
+        Cache::store('redis')->add($key, 0, now()->endOfDay());
+        Cache::store('redis')->increment($key);
     }
 
     /**
@@ -40,7 +40,7 @@ class SpendingCap
      */
     public function spentToday(): int
     {
-        return (int) Cache::get($this->key(), 0);
+        return (int) Cache::store('redis')->get($this->key(), 0);
     }
 
     /**
