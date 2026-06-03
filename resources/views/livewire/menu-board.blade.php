@@ -211,7 +211,7 @@ new #[Layout('layouts.app')] class extends Component {
                     AI plates a fresh dish onto the pass every few seconds. <span class="text-[#1A1814]">Vote each ticket up or down</span> — win the room over and the kitchen cooks it off the pass.
                 </p>
             </div>
-            <dl class="grid grid-cols-3 gap-px overflow-hidden rounded-sm border-2 border-[#1A1814] bg-[#1A1814] text-center text-[#F5EFE0] lg:w-80">
+            <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-sm border-2 border-[#1A1814] bg-[#1A1814] text-center text-[#F5EFE0] lg:w-80">
                 <div class="bg-[#1A1814] px-3 py-3">
                     <dt class="text-[0.65rem] uppercase tracking-wider text-[#F5EFE0]/70">Orders</dt>
                     <dd class="mt-1 font-stencil text-2xl tabular-nums">{{ count($dishes) }}</dd>
@@ -219,10 +219,6 @@ new #[Layout('layouts.app')] class extends Component {
                 <div class="bg-[#1A1814] px-3 py-3">
                     <dt class="text-[0.65rem] uppercase tracking-wider text-[#F5EFE0]/70">Votes</dt>
                     <dd class="mt-1 font-stencil text-2xl tabular-nums">{{ number_format($this->totalVotes) }}</dd>
-                </div>
-                <div class="bg-[#1A1814] px-3 py-3">
-                    <dt class="text-[0.65rem] uppercase tracking-wider text-[#F5EFE0]/70">Workers</dt>
-                    <dd class="mt-1 font-stencil text-2xl tabular-nums">{{ config('plated.workers') }}</dd>
                 </div>
             </dl>
         </header>

@@ -4,19 +4,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Queue Workers
-    |--------------------------------------------------------------------------
-    |
-    | The number of queue workers shown on the board's header. On Laravel
-    | Cloud this maps to the worker concurrency that scale-to-zero spins up
-    | on demand to plate new tickets.
-    |
-    */
-
-    'workers' => (int) env('PLATED_WORKERS', 4),
-
-    /*
-    |--------------------------------------------------------------------------
     | AI Daily Dish Cap
     |--------------------------------------------------------------------------
     |
