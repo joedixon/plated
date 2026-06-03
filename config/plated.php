@@ -4,19 +4,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | AI Daily Dish Cap
-    |--------------------------------------------------------------------------
-    |
-    | The maximum number of AI-generated dishes allowed per day. Mirrors the
-    | spending caps enforced at the infrastructure level on Laravel Cloud —
-    | once the cap is hit, dish generation stops until the next day.
-    |
-    */
-
-    'ai_daily_dish_cap' => (int) env('PLATED_AI_DAILY_DISH_CAP', 50),
-
-    /*
-    |--------------------------------------------------------------------------
     | Cook Threshold
     |--------------------------------------------------------------------------
     |

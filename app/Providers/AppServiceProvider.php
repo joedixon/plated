@@ -2,7 +2,6 @@
 
 namespace App\Providers;
 
-use App\Support\SpendingCap;
 use Illuminate\Auth\GenericUser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -10,16 +9,6 @@ use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
-    public function register(): void
-    {
-        $this->app->singleton(SpendingCap::class, fn (): SpendingCap => new SpendingCap(
-            (int) config('plated.ai_daily_dish_cap'),
-        ));
-    }
-
     /**
      * Bootstrap any application services.
      */
