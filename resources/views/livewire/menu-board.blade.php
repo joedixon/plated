@@ -34,7 +34,7 @@ new #[Layout('layouts.app')] class extends Component {
     {
         $this->voterId = session()->getId();
 
-        $this->dishes = Dish::onThePass()->ordered()->get()->map(function (Dish $dish): array {
+        $this->dishes = Dish::onThePass()->ordered()->limit(20)->get()->map(function (Dish $dish): array {
             ['up' => $up, 'down' => $down] = $this->tallyFor($dish->id);
 
             return [
@@ -173,6 +173,9 @@ new #[Layout('layouts.app')] class extends Component {
             'down' => (int) $event['down'],
             'pct' => (int) $event['pct'],
         ]);
+
+        // Keep the board capped at the newest 20 dishes, matching mount().
+        $this->dishes = array_slice($this->dishes, 0, 20);
     }
 
     /**
