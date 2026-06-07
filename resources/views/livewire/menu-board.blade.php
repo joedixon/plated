@@ -13,6 +13,11 @@ use Livewire\Volt\Component;
 
 new #[Layout('layouts.app')] class extends Component {
     /**
+     * How many dishes the pass shows at once.
+     */
+    private const BOARD_SIZE = 20;
+
+    /**
      * The dishes on the board, each a flat row ready for the view.
      *
      * @var list<array{id: int, name: string, description: string, pairing: string, glyph: string, sequence: int, up: int, down: int, pct: int}>
@@ -34,21 +39,31 @@ new #[Layout('layouts.app')] class extends Component {
     {
         $this->voterId = session()->getId();
 
-        $this->dishes = Dish::onThePass()->ordered()->limit(20)->get()->map(function (Dish $dish): array {
-            ['up' => $up, 'down' => $down] = $this->tallyFor($dish->id);
+        $this->dishes = Dish::onThePass()->ordered()->limit(self::BOARD_SIZE)->get()
+            ->map(fn (Dish $dish): array => $this->rowForModel($dish))
+            ->all();
+    }
 
-            return [
-                'id' => $dish->id,
-                'name' => $dish->name,
-                'description' => $dish->description,
-                'pairing' => $dish->pairing,
-                'glyph' => $dish->glyph,
-                'sequence' => $dish->sequence,
-                'up' => $up,
-                'down' => $down,
-                'pct' => Approval::percentage($up, $down),
-            ];
-        })->all();
+    /**
+     * Build a board row from a dish model, pulling in its live tally.
+     *
+     * @return array{id: int, name: string, description: string, pairing: string, glyph: string, sequence: int, up: int, down: int, pct: int}
+     */
+    private function rowForModel(Dish $dish): array
+    {
+        ['up' => $up, 'down' => $down] = $this->tallyFor($dish->id);
+
+        return [
+            'id' => $dish->id,
+            'name' => $dish->name,
+            'description' => $dish->description,
+            'pairing' => $dish->pairing,
+            'glyph' => $dish->glyph,
+            'sequence' => $dish->sequence,
+            'up' => $up,
+            'down' => $down,
+            'pct' => Approval::percentage($up, $down),
+        ];
     }
 
     /**
@@ -72,12 +87,18 @@ new #[Layout('layouts.app')] class extends Component {
     }
 
     /**
-     * The total number of votes cast across the whole room.
+     * The running total of every vote cast in the room. Backed by its own
+     * counter so it keeps climbing as dishes cook off the board rather than
+     * dropping by a ticket's tally when it leaves the pass.
      */
     #[Computed]
     public function totalVotes(): int
     {
-        return array_sum(array_map(fn (array $dish): int => $dish['up'] + $dish['down'], $this->dishes));
+        try {
+            return (int) Cache::store('redis')->get('votes:total', 0);
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     /**
@@ -101,6 +122,10 @@ new #[Layout('layouts.app')] class extends Component {
             $key = "dish:{$dishId}:{$direction}";
             Cache::store('redis')->add($key, 0);
             Cache::store('redis')->increment($key);
+
+            // Bump the room-wide running total alongside the per-dish counter.
+            Cache::store('redis')->add('votes:total', 0);
+            Cache::store('redis')->increment('votes:total');
 
             $up = (int) Cache::store('redis')->get("dish:{$dishId}:up", 0);
             $down = (int) Cache::store('redis')->get("dish:{$dishId}:down", 0);
@@ -174,8 +199,8 @@ new #[Layout('layouts.app')] class extends Component {
             'pct' => (int) $event['pct'],
         ]);
 
-        // Keep the board capped at the newest 20 dishes, matching mount().
-        $this->dishes = array_slice($this->dishes, 0, 20);
+        // Keep the board capped at its size, matching mount().
+        $this->dishes = array_slice($this->dishes, 0, self::BOARD_SIZE);
     }
 
     /**
@@ -191,7 +216,28 @@ new #[Layout('layouts.app')] class extends Component {
             fn (array $dish): bool => $dish['id'] !== (int) $event['dishId'],
         ));
 
+        $this->backfill();
+
         $this->dispatch('dish-cooked', glyph: $event['glyph']);
+    }
+
+    /**
+     * Top the pass back up to its full size after a dish cooks off, pulling in
+     * the next oldest plated tickets that aren't already on the board.
+     */
+    private function backfill(): void
+    {
+        $needed = self::BOARD_SIZE - count($this->dishes);
+
+        if ($needed < 1) {
+            return;
+        }
+
+        Dish::onThePass()->ordered()
+            ->whereNotIn('id', array_column($this->dishes, 'id'))
+            ->limit($needed)
+            ->get()
+            ->each(fn (Dish $dish) => $this->dishes[] = $this->rowForModel($dish));
     }
 
     /**
