@@ -297,7 +297,7 @@ new #[Layout('layouts.app')] class extends Component {
             </div>
         @endunless
 
-        <header class="mb-8 grid gap-6 border-b-2 border-dashed border-[#1A1814]/30 pb-8 lg:grid-cols-[1fr_auto] lg:items-end">
+        <header class="mb-8 grid gap-6 border-b-2 border-dashed border-[#1A1814]/30 pb-8 lg:grid-cols-[1fr_auto] lg:items-stretch">
             <div>
                 <div class="mb-3 flex items-center gap-3 text-xs uppercase tracking-wider text-[#3FA35A]">
                     <span class="relative flex size-2">
@@ -313,26 +313,26 @@ new #[Layout('layouts.app')] class extends Component {
                     AI plates a fresh dish onto the pass every few seconds. <span class="text-[#1A1814]">Vote each ticket up or down</span> — win the room over and the kitchen cooks it off the pass.
                 </p>
             </div>
-            <div class="flex flex-col gap-4 lg:w-80">
-                <div class="flex items-center gap-4 rounded-sm border-2 border-[#1A1814] bg-[#FBF7EC] p-3">
-                    <div class="shrink-0 rounded-sm bg-white p-1.5 [&>svg]:size-28 [&>svg]:fill-[#1A1814]">
-                        {!! $this->joinQr !!}
-                    </div>
-                    <div class="text-left">
-                        <p class="font-stencil text-sm uppercase tracking-wider text-[#1A1814]">Scan to join</p>
-                        <p class="mt-1 text-[0.7rem] leading-4 text-[#5B5147]">Point your camera here to open the pass and vote.</p>
-                    </div>
-                </div>
-                <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-sm border-2 border-[#1A1814] bg-[#1A1814] text-center text-[#F5EFE0]">
-                    <div class="bg-[#1A1814] px-3 py-3">
+            <div class="flex items-stretch gap-4 lg:justify-end">
+                <dl class="grid grid-rows-2 gap-px overflow-hidden rounded-sm border-2 border-[#1A1814] bg-[#1A1814] text-center text-[#F5EFE0]">
+                    <div class="flex min-w-24 flex-col justify-center bg-[#1A1814] px-4 py-2">
                         <dt class="text-[0.65rem] uppercase tracking-wider text-[#F5EFE0]/70">Orders</dt>
                         <dd class="mt-1 font-stencil text-2xl tabular-nums">{{ count($dishes) }}</dd>
                     </div>
-                    <div class="bg-[#1A1814] px-3 py-3">
+                    <div class="flex min-w-24 flex-col justify-center bg-[#1A1814] px-4 py-2">
                         <dt class="text-[0.65rem] uppercase tracking-wider text-[#F5EFE0]/70">Votes</dt>
                         <dd class="mt-1 font-stencil text-2xl tabular-nums">{{ number_format($this->totalVotes) }}</dd>
                     </div>
                 </dl>
+                <div
+                    class="flex aspect-square shrink-0 items-center justify-center rounded-sm border-2 border-[#1A1814] bg-white p-2"
+                    role="img"
+                    aria-label="Scan to join the pass and vote"
+                >
+                    <div class="h-full [&>svg]:block [&>svg]:size-full [&>svg]:fill-[#1A1814]">
+                        {!! $this->joinQr !!}
+                    </div>
+                </div>
             </div>
         </header>
 
