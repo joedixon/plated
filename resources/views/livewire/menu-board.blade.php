@@ -10,6 +10,7 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Volt\Component;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 new #[Layout('layouts.app')] class extends Component {
     /**
@@ -99,6 +100,20 @@ new #[Layout('layouts.app')] class extends Component {
         } catch (\Throwable) {
             return 0;
         }
+    }
+
+    /**
+     * An inline SVG QR code pointing at the board so the room can scan to join.
+     * Generated server-side from APP_URL — no external service, no JS.
+     */
+    #[Computed]
+    public function joinQr(): string
+    {
+        return QrCode::format('svg')
+            ->size(180)
+            ->margin(1)
+            ->errorCorrection('M')
+            ->generate(config('app.url'));
     }
 
     /**
@@ -298,16 +313,27 @@ new #[Layout('layouts.app')] class extends Component {
                     AI plates a fresh dish onto the pass every few seconds. <span class="text-[#1A1814]">Vote each ticket up or down</span> — win the room over and the kitchen cooks it off the pass.
                 </p>
             </div>
-            <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-sm border-2 border-[#1A1814] bg-[#1A1814] text-center text-[#F5EFE0] lg:w-80">
-                <div class="bg-[#1A1814] px-3 py-3">
-                    <dt class="text-[0.65rem] uppercase tracking-wider text-[#F5EFE0]/70">Orders</dt>
-                    <dd class="mt-1 font-stencil text-2xl tabular-nums">{{ count($dishes) }}</dd>
+            <div class="flex flex-col gap-4 lg:w-80">
+                <div class="flex items-center gap-4 rounded-sm border-2 border-[#1A1814] bg-[#FBF7EC] p-3">
+                    <div class="shrink-0 rounded-sm bg-white p-1.5 [&>svg]:size-28 [&>svg]:fill-[#1A1814]">
+                        {!! $this->joinQr !!}
+                    </div>
+                    <div class="text-left">
+                        <p class="font-stencil text-sm uppercase tracking-wider text-[#1A1814]">Scan to join</p>
+                        <p class="mt-1 text-[0.7rem] leading-4 text-[#5B5147]">Point your camera here to open the pass and vote.</p>
+                    </div>
                 </div>
-                <div class="bg-[#1A1814] px-3 py-3">
-                    <dt class="text-[0.65rem] uppercase tracking-wider text-[#F5EFE0]/70">Votes</dt>
-                    <dd class="mt-1 font-stencil text-2xl tabular-nums">{{ number_format($this->totalVotes) }}</dd>
-                </div>
-            </dl>
+                <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-sm border-2 border-[#1A1814] bg-[#1A1814] text-center text-[#F5EFE0]">
+                    <div class="bg-[#1A1814] px-3 py-3">
+                        <dt class="text-[0.65rem] uppercase tracking-wider text-[#F5EFE0]/70">Orders</dt>
+                        <dd class="mt-1 font-stencil text-2xl tabular-nums">{{ count($dishes) }}</dd>
+                    </div>
+                    <div class="bg-[#1A1814] px-3 py-3">
+                        <dt class="text-[0.65rem] uppercase tracking-wider text-[#F5EFE0]/70">Votes</dt>
+                        <dd class="mt-1 font-stencil text-2xl tabular-nums">{{ number_format($this->totalVotes) }}</dd>
+                    </div>
+                </dl>
+            </div>
         </header>
 
         <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" role="list">

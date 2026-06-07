@@ -43,6 +43,15 @@ it('broadcasts a tally update on the public board channel', function () {
         ]);
 });
 
+it('renders an inline join QR code on the board', function () {
+    Dish::factory()->create(['status' => DishStatus::Plated]);
+
+    $this->get('/')
+        ->assertOk()
+        ->assertSee('Scan to join')
+        ->assertSee('<svg', escape: false);
+});
+
 it('caps the board and refills it when a dish cooks off', function () {
     Dish::factory()->count(21)->create(['status' => DishStatus::Plated]);
 
