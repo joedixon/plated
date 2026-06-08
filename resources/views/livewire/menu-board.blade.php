@@ -16,7 +16,7 @@ new #[Layout('layouts.app')] class extends Component {
     /**
      * How many dishes the pass shows at once.
      */
-    private const BOARD_SIZE = 20;
+    private const BOARD_SIZE = 21;
 
     /**
      * The dishes on the board, each a flat row ready for the view.
