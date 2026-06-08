@@ -48,6 +48,17 @@ new #[Layout('layouts.app')] class extends Component {
         return (bool) config('plated.voting');
     }
 
+    /**
+     * Whether real-time updates are wired up for this environment. With no
+     * websocket broadcaster attached the board falls back to a plain static
+     * menu, so the live indicator and connection count stay hidden.
+     */
+    #[Computed]
+    public function realtimeEnabled(): bool
+    {
+        return ! in_array(config('broadcasting.default'), ['null', 'log'], true);
+    }
+
     public function mount(): void
     {
         $this->voterId = session()->getId();
@@ -319,13 +330,37 @@ new #[Layout('layouts.app')] class extends Component {
 
         <header class="mb-8 grid gap-6 border-b-2 border-dashed border-[#1A1814]/30 pb-8 lg:grid-cols-[1fr_auto] lg:items-stretch">
             <div>
-                <div class="mb-3 flex items-center gap-3 text-xs uppercase tracking-wider text-[#3FA35A]">
-                    <span class="relative flex size-2">
-                        <span class="absolute inset-0 animate-ping rounded-full bg-[#3FA35A] opacity-75"></span>
-                        <span class="relative inline-flex size-2 rounded-full bg-[#3FA35A]"></span>
-                    </span>
-                    <span class="font-semibold">On the pass · Live</span>
-                </div>
+                @if ($this->realtimeEnabled)
+                    <div
+                        x-data="{
+                            connected: false,
+                            connections: 0,
+                            init() {
+                                const connection = window.Echo.connector.pusher.connection;
+                                this.connected = connection.state === 'connected';
+                                connection.bind('state_change', state => this.connected = state.current === 'connected');
+
+                                window.Echo.join('board')
+                                    .here(users => this.connections = users.length)
+                                    .joining(() => this.connections++)
+                                    .leaving(() => this.connections--);
+                            },
+                        }"
+                        class="mb-3 flex items-center gap-2.5 text-xs uppercase tracking-wider"
+                        :class="connected ? 'text-[#3FA35A]' : 'text-[#5B5147]'"
+                    >
+                        <span class="relative flex size-2">
+                            <span x-show="connected" class="absolute inset-0 animate-ping rounded-full bg-[#3FA35A] opacity-75"></span>
+                            <span class="relative inline-flex size-2 rounded-full" :class="connected ? 'bg-[#3FA35A]' : 'bg-[#5B5147]'"></span>
+                        </span>
+                        <span class="font-semibold" x-text="connected ? 'On the pass · Live' : 'On the pass · Connecting'"></span>
+                        <template x-if="connected">
+                            <span class="font-semibold text-[#1A1814]">·
+                                <span class="tabular-nums" x-text="connections">0</span> watching
+                            </span>
+                        </template>
+                    </div>
+                @endif
                 <h1 class="font-stencil text-6xl uppercase tracking-tight text-balance text-[#1A1814] sm:text-7xl lg:text-8xl">
                     Plated<span class="text-[#C8362E]">.</span>
                 </h1>
@@ -406,16 +441,8 @@ new #[Layout('layouts.app')] class extends Component {
                 @endforeach
         </div>
 
-        <footer class="mt-16 grid gap-3 border-t-2 border-dashed border-[#1A1814]/30 pt-6 text-[0.7rem] uppercase tracking-wider text-[#5B5147] sm:grid-cols-3">
+        <footer class="mt-16 grid gap-3 border-t-2 border-dashed border-[#1A1814]/30 pt-6 text-[0.7rem] uppercase tracking-wider text-[#5B5147] sm:grid-cols-2">
             <p>Pass closes at the end of the webinar. Tickets keep firing on the queue.</p>
-            <p
-                class="sm:text-center"
-                x-data="{ n: 0 }"
-                x-init="window.Echo.join('board')
-                    .here(users => n = users.length)
-                    .joining(() => n++)
-                    .leaving(() => n--)"
-            >Connections <span class="ml-2 tabular-nums text-[#1A1814]" x-text="n">0</span></p>
             <p class="sm:text-right">Plated · Laravel Cloud 2.0 demo</p>
         </footer>
     </div>
