@@ -76,6 +76,8 @@ class DishSeeder extends Seeder
      */
     public function run(): void
     {
+        $voting = config('plated.voting');
+
         foreach (self::OPENING_MENU as $dish) {
             $model = Dish::updateOrCreate(
                 ['sequence' => $dish['sequence']],
@@ -88,12 +90,16 @@ class DishSeeder extends Seeder
                 ],
             );
 
-            Cache::store('redis')->forever("dish:{$model->id}:up", $dish['up']);
-            Cache::store('redis')->forever("dish:{$model->id}:down", $dish['down']);
+            if ($voting) {
+                Cache::forever("dish:{$model->id}:up", $dish['up']);
+                Cache::forever("dish:{$model->id}:down", $dish['down']);
+            }
         }
 
         // Seed the room-wide running total to match the opening tallies.
-        $total = collect(self::OPENING_MENU)->sum(fn (array $dish): int => $dish['up'] + $dish['down']);
-        Cache::store('redis')->forever('votes:total', $total);
+        if ($voting) {
+            $total = collect(self::OPENING_MENU)->sum(fn (array $dish): int => $dish['up'] + $dish['down']);
+            Cache::forever('votes:total', $total);
+        }
     }
 }

@@ -31,10 +31,22 @@ new #[Layout('layouts.app')] class extends Component {
     public string $voterId = '';
 
     /**
-     * Whether the live tally store (Redis) is reachable. When it isn't, the
-     * board still renders the menu — votes just can't be read or cast.
+     * Whether the live tally store is reachable. Only meaningful while voting
+     * is enabled — when it isn't, the board still renders the menu, but votes
+     * just can't be read or cast and the offline notice shows.
      */
     public bool $tallyOnline = true;
+
+    /**
+     * Whether voting is switched on for this environment. Driven by config:
+     * with no Redis-compatible cache attached the board is read-only and never
+     * touches the cache, so the vote buttons and tallies stay hidden.
+     */
+    #[Computed]
+    public function votingEnabled(): bool
+    {
+        return (bool) config('plated.voting');
+    }
 
     public function mount(): void
     {
@@ -75,10 +87,14 @@ new #[Layout('layouts.app')] class extends Component {
      */
     private function tallyFor(int $dishId): array
     {
+        if (! $this->votingEnabled) {
+            return ['up' => 0, 'down' => 0];
+        }
+
         try {
             return [
-                'up' => (int) Cache::store('redis')->get("dish:{$dishId}:up", 0),
-                'down' => (int) Cache::store('redis')->get("dish:{$dishId}:down", 0),
+                'up' => (int) Cache::get("dish:{$dishId}:up", 0),
+                'down' => (int) Cache::get("dish:{$dishId}:down", 0),
             ];
         } catch (\Throwable) {
             $this->tallyOnline = false;
@@ -95,8 +111,12 @@ new #[Layout('layouts.app')] class extends Component {
     #[Computed]
     public function totalVotes(): int
     {
+        if (! $this->votingEnabled) {
+            return 0;
+        }
+
         try {
-            return (int) Cache::store('redis')->get('votes:total', 0);
+            return (int) Cache::get('votes:total', 0);
         } catch (\Throwable) {
             return 0;
         }
@@ -121,29 +141,29 @@ new #[Layout('layouts.app')] class extends Component {
      */
     public function vote(int $dishId, string $direction): void
     {
-        if (! in_array($direction, ['up', 'down'], true)) {
+        if (! $this->votingEnabled || ! in_array($direction, ['up', 'down'], true)) {
             return;
         }
 
         try {
             // One vote per visitor per dish: add() only succeeds the first time,
             // so a repeat vote is dropped without ever touching the tally.
-            if (! Cache::store('redis')->add("dish:{$dishId}:voter:{$this->voterId}", true, now()->addDay())) {
+            if (! Cache::add("dish:{$dishId}:voter:{$this->voterId}", true, now()->addDay())) {
                 return;
             }
 
             // add() guarantees the counter exists, then increment() is an atomic
             // bump — correct no matter how many visitors vote at the same instant.
             $key = "dish:{$dishId}:{$direction}";
-            Cache::store('redis')->add($key, 0);
-            Cache::store('redis')->increment($key);
+            Cache::add($key, 0);
+            Cache::increment($key);
 
             // Bump the room-wide running total alongside the per-dish counter.
-            Cache::store('redis')->add('votes:total', 0);
-            Cache::store('redis')->increment('votes:total');
+            Cache::add('votes:total', 0);
+            Cache::increment('votes:total');
 
-            $up = (int) Cache::store('redis')->get("dish:{$dishId}:up", 0);
-            $down = (int) Cache::store('redis')->get("dish:{$dishId}:down", 0);
+            $up = (int) Cache::get("dish:{$dishId}:up", 0);
+            $down = (int) Cache::get("dish:{$dishId}:down", 0);
         } catch (\Throwable) {
             $this->tallyOnline = false;
 
@@ -290,12 +310,12 @@ new #[Layout('layouts.app')] class extends Component {
 
     <div class="mx-auto max-w-7xl px-5 pt-10 pb-20 sm:px-8 lg:px-12">
 
-        @unless ($tallyOnline)
+        @if ($this->votingEnabled && ! $tallyOnline)
             <div class="mb-8 flex items-center gap-3 rounded-sm border-2 border-[#C8362E] bg-[#C8362E]/10 px-4 py-3 text-sm text-[#1A1814]" role="status">
                 <span class="font-stencil text-base uppercase tracking-wider text-[#C8362E]">Tally offline</span>
                 <span class="text-[#5B5147]">The live vote store is unreachable, so voting is paused. The menu is still being plated.</span>
             </div>
-        @endunless
+        @endif
 
         <header class="mb-8 grid gap-6 border-b-2 border-dashed border-[#1A1814]/30 pb-8 lg:grid-cols-[1fr_auto] lg:items-stretch">
             <div>
@@ -314,15 +334,17 @@ new #[Layout('layouts.app')] class extends Component {
                 </p>
             </div>
             <div class="flex items-stretch gap-4 lg:justify-end">
-                <dl class="grid grid-rows-2 gap-px overflow-hidden rounded-sm border-2 border-[#1A1814] bg-[#1A1814] text-center text-[#F5EFE0]">
+                <dl class="grid gap-px overflow-hidden rounded-sm border-2 border-[#1A1814] bg-[#1A1814] text-center text-[#F5EFE0]">
                     <div class="flex min-w-24 flex-col justify-center bg-[#1A1814] px-4 py-2">
                         <dt class="text-[0.65rem] uppercase tracking-wider text-[#F5EFE0]/70">Orders</dt>
                         <dd class="mt-1 font-stencil text-2xl tabular-nums">{{ count($dishes) }}</dd>
                     </div>
-                    <div class="flex min-w-24 flex-col justify-center bg-[#1A1814] px-4 py-2">
-                        <dt class="text-[0.65rem] uppercase tracking-wider text-[#F5EFE0]/70">Votes</dt>
-                        <dd class="mt-1 font-stencil text-2xl tabular-nums">{{ number_format($this->totalVotes) }}</dd>
-                    </div>
+                    @if ($this->votingEnabled)
+                        <div class="flex min-w-24 flex-col justify-center bg-[#1A1814] px-4 py-2">
+                            <dt class="text-[0.65rem] uppercase tracking-wider text-[#F5EFE0]/70">Votes</dt>
+                            <dd class="mt-1 font-stencil text-2xl tabular-nums">{{ number_format($this->totalVotes) }}</dd>
+                        </div>
+                    @endif
                 </dl>
                 <div
                     class="flex aspect-square shrink-0 items-center justify-center rounded-sm border-2 border-[#1A1814] bg-white p-2"
@@ -359,25 +381,27 @@ new #[Layout('layouts.app')] class extends Component {
                             <p class="mt-2 text-[0.8125rem] leading-5 text-[#5B5147] text-pretty">{{ $meal['description'] }}</p>
                             <p class="mt-3 text-[0.7rem] uppercase tracking-wider text-[#1A1814]/60">Pairs with · <span class="text-[#1A1814]">{{ $meal['pairing'] }}</span></p>
                         </div>
-                        <div class="border-t border-dashed border-[#1A1814]/40 px-5 py-3">
-                            <div class="mb-2 flex items-center justify-between text-[0.7rem] uppercase tracking-wider text-[#5B5147]">
-                                <span>Tally</span>
-                                <span class="tabular-nums">{{ $meal['pct'] }}% approval</span>
+                        @if ($this->votingEnabled)
+                            <div class="border-t border-dashed border-[#1A1814]/40 px-5 py-3">
+                                <div class="mb-2 flex items-center justify-between text-[0.7rem] uppercase tracking-wider text-[#5B5147]">
+                                    <span>Tally</span>
+                                    <span class="tabular-nums">{{ $meal['pct'] }}% approval</span>
+                                </div>
+                                <div class="h-2 overflow-hidden bg-[#1A1814]/10">
+                                    <div class="h-full bg-[#3E5B3E] w-(--bar)" style="--bar: {{ $meal['pct'] }}%"></div>
+                                </div>
                             </div>
-                            <div class="h-2 overflow-hidden bg-[#1A1814]/10">
-                                <div class="h-full bg-[#3E5B3E] w-(--bar)" style="--bar: {{ $meal['pct'] }}%"></div>
+                            <div class="grid grid-cols-2 border-t-2 border-[#1A1814]">
+                                <button type="button" wire:click="vote({{ $meal['id'] }}, 'up')" class="flex items-center justify-center gap-2 border-r-2 border-[#1A1814] bg-[#FBF7EC] px-4 py-3 text-sm font-semibold uppercase tracking-wider text-[#1A1814] transition hover:bg-[#3E5B3E] hover:text-[#F5EFE0]">
+                                    <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 11V21H4a1 1 0 01-1-1v-8a1 1 0 011-1h3zm0 0l4-7a2 2 0 012-2h.5a1.5 1.5 0 011.5 1.5V8h5.5a2 2 0 012 2l-2 9a2 2 0 01-2 1.5H7"/></svg>
+                                    <span class="tabular-nums">{{ $meal['up'] }}</span>
+                                </button>
+                                <button type="button" wire:click="vote({{ $meal['id'] }}, 'down')" class="flex items-center justify-center gap-2 bg-[#FBF7EC] px-4 py-3 text-sm font-semibold uppercase tracking-wider text-[#1A1814] transition hover:bg-[#C8362E] hover:text-[#F5EFE0]">
+                                    <svg class="size-4 -scale-y-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 11V21H4a1 1 0 01-1-1v-8a1 1 0 011-1h3zm0 0l4-7a2 2 0 012-2h.5a1.5 1.5 0 011.5 1.5V8h5.5a2 2 0 012 2l-2 9a2 2 0 01-2 1.5H7"/></svg>
+                                    <span class="tabular-nums">{{ $meal['down'] }}</span>
+                                </button>
                             </div>
-                        </div>
-                        <div class="grid grid-cols-2 border-t-2 border-[#1A1814]">
-                            <button type="button" wire:click="vote({{ $meal['id'] }}, 'up')" class="flex items-center justify-center gap-2 border-r-2 border-[#1A1814] bg-[#FBF7EC] px-4 py-3 text-sm font-semibold uppercase tracking-wider text-[#1A1814] transition hover:bg-[#3E5B3E] hover:text-[#F5EFE0]">
-                                <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 11V21H4a1 1 0 01-1-1v-8a1 1 0 011-1h3zm0 0l4-7a2 2 0 012-2h.5a1.5 1.5 0 011.5 1.5V8h5.5a2 2 0 012 2l-2 9a2 2 0 01-2 1.5H7"/></svg>
-                                <span class="tabular-nums">{{ $meal['up'] }}</span>
-                            </button>
-                            <button type="button" wire:click="vote({{ $meal['id'] }}, 'down')" class="flex items-center justify-center gap-2 bg-[#FBF7EC] px-4 py-3 text-sm font-semibold uppercase tracking-wider text-[#1A1814] transition hover:bg-[#C8362E] hover:text-[#F5EFE0]">
-                                <svg class="size-4 -scale-y-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 11V21H4a1 1 0 01-1-1v-8a1 1 0 011-1h3zm0 0l4-7a2 2 0 012-2h.5a1.5 1.5 0 011.5 1.5V8h5.5a2 2 0 012 2l-2 9a2 2 0 01-2 1.5H7"/></svg>
-                                <span class="tabular-nums">{{ $meal['down'] }}</span>
-                            </button>
-                        </div>
+                        @endif
                     </article>
                 @endforeach
         </div>

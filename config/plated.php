@@ -28,4 +28,19 @@ return [
 
     'menu_interval' => (int) env('PLATED_MENU_INTERVAL', 30),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Voting
+    |--------------------------------------------------------------------------
+    |
+    | Voting relies on a Redis-compatible cache (Laravel Valkey on Cloud) to
+    | tally and de-duplicate votes. When the default cache store isn't redis —
+    | because no cache is attached — voting is switched off entirely: the board
+    | never touches the cache and renders read-only, hiding the vote buttons
+    | and tallies.
+    |
+    */
+
+    'voting' => config('cache.default') === 'redis',
+
 ];

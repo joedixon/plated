@@ -17,7 +17,7 @@ use Tests\TestCase;
 
 pest()->extend(TestCase::class)
     ->use(LazilyRefreshDatabase::class)
-    ->beforeEach(fn () => Cache::store('redis')->flush())
+    ->beforeEach(fn () => Cache::flush())
     ->in('Feature');
 
 /*
@@ -51,8 +51,8 @@ expect()->extend('toBeOne', function () {
  */
 function seedTally(int $dishId, int $up, int $down): void
 {
-    Cache::store('redis')->forever("dish:{$dishId}:up", $up);
-    Cache::store('redis')->forever("dish:{$dishId}:down", $down);
+    Cache::forever("dish:{$dishId}:up", $up);
+    Cache::forever("dish:{$dishId}:down", $down);
 }
 
 /**
@@ -63,7 +63,7 @@ function seedTally(int $dishId, int $up, int $down): void
 function tallyCounts(int $dishId): array
 {
     return [
-        'up' => (int) Cache::store('redis')->get("dish:{$dishId}:up", 0),
-        'down' => (int) Cache::store('redis')->get("dish:{$dishId}:down", 0),
+        'up' => (int) Cache::get("dish:{$dishId}:up", 0),
+        'down' => (int) Cache::get("dish:{$dishId}:down", 0),
     ];
 }

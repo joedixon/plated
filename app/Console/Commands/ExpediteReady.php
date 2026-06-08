@@ -21,13 +21,19 @@ class ExpediteReady extends Command
      */
     public function handle(): int
     {
+        if (! config('plated.voting')) {
+            $this->info('Voting is disabled (no cache configured); nothing to expedite.');
+
+            return self::SUCCESS;
+        }
+
         $threshold = (int) config('plated.cook_threshold');
         $cooked = 0;
 
         foreach (Dish::onThePass()->get() as $dish) {
             try {
-                $up = (int) Cache::store('redis')->get("dish:{$dish->id}:up", 0);
-                $down = (int) Cache::store('redis')->get("dish:{$dish->id}:down", 0);
+                $up = (int) Cache::get("dish:{$dish->id}:up", 0);
+                $down = (int) Cache::get("dish:{$dish->id}:down", 0);
             } catch (\Throwable) {
                 $this->error('Tally store unreachable — aborting without cooking anything.');
 

@@ -44,16 +44,18 @@ class GenerateDish implements ShouldQueue
             'status' => DishStatus::Plated,
         ]);
 
-        // Seed the live tally if Redis is reachable. A missing tally store
-        // shouldn't fail the job — the board lazily defaults counts to zero.
-        try {
-            Cache::store('redis')->forever("dish:{$dish->id}:up", 0);
-            Cache::store('redis')->forever("dish:{$dish->id}:down", 0);
-        } catch (Throwable $e) {
-            Log::warning('Plated tally store unreachable; dish plated without seeded counts.', [
-                'dish' => $dish->id,
-                'exception' => $e->getMessage(),
-            ]);
+        // Seed the live tally when voting is on. A missing or unreachable tally
+        // store shouldn't fail the job — the board lazily defaults counts to zero.
+        if (config('plated.voting')) {
+            try {
+                Cache::forever("dish:{$dish->id}:up", 0);
+                Cache::forever("dish:{$dish->id}:down", 0);
+            } catch (Throwable $e) {
+                Log::warning('Plated tally store unreachable; dish plated without seeded counts.', [
+                    'dish' => $dish->id,
+                    'exception' => $e->getMessage(),
+                ]);
+            }
         }
 
         DishPlated::dispatch($dish);

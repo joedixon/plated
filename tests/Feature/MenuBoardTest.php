@@ -5,6 +5,7 @@ use App\Events\DishCooked;
 use App\Events\DishPlated;
 use App\Events\TallyUpdated;
 use App\Models\Dish;
+use Illuminate\Support\Facades\Event;
 use Livewire\Volt\Volt;
 
 it('renders the board with its dishes and tallies', function () {
@@ -41,6 +42,26 @@ it('broadcasts a tally update on the public board channel', function () {
             'down' => 2,
             'pct' => 80,
         ]);
+});
+
+it('renders read-only and never touches the cache when voting is disabled', function () {
+    config()->set('plated.voting', false);
+    Event::fake([TallyUpdated::class]);
+
+    $dish = Dish::factory()->create(['status' => DishStatus::Plated]);
+
+    $this->get('/')
+        ->assertOk()
+        ->assertSee($dish->name)
+        ->assertDontSee('Votes')
+        ->assertDontSee('approval')
+        ->assertDontSee('wire:click="vote', escape: false);
+
+    // A vote is a no-op: nothing is written and nothing broadcasts.
+    Volt::test('menu-board')->call('vote', $dish->id, 'up');
+
+    expect(tallyCounts($dish->id))->toBe(['up' => 0, 'down' => 0]);
+    Event::assertNotDispatched(TallyUpdated::class);
 });
 
 it('renders an inline join QR code on the board', function () {
