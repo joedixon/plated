@@ -364,9 +364,6 @@ new #[Layout('layouts.app')] class extends Component {
                 <h1 class="font-stencil text-6xl uppercase tracking-tight text-balance text-[#1A1814] sm:text-7xl lg:text-8xl">
                     Plated<span class="text-[#C8362E]">.</span>
                 </h1>
-                <p class="mt-4 max-w-[60ch] text-sm leading-6 text-[#5B5147] text-pretty">
-                    AI plates a fresh dish onto the pass every few seconds. <span class="text-[#1A1814]">Vote each ticket up or down</span> — win the room over and the kitchen cooks it off the pass.
-                </p>
             </div>
             <div class="flex items-stretch gap-4 lg:justify-end">
                 <dl class="grid gap-px overflow-hidden rounded-sm border-2 border-[#1A1814] bg-[#1A1814] text-center text-[#F5EFE0]">
